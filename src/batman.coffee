@@ -1921,9 +1921,17 @@ class Batman.Model extends Batman.Object
         @get('loaded').add(record)
         return record
 
+  # ### Associations API
+
+  @hasOne: (label, model) ->
+    new Batman.Association.hasOne @, label, model
+
+  @belongsTo: (label, model) ->
+    new Batman.Association.belongsTo @, label, model
+
   # ### Record API
 
-  # Add a universally accessible accessor for retrieving the primrary key, regardless of which key its stored under.
+  # Add a universally accessible accessor for retrieving the primary key, regardless of which key it's stored under.
   @accessor 'id',
     get: ->
       pk = @constructor.get('primaryKey')
@@ -2082,6 +2090,19 @@ class Batman.Model extends Batman.Object
 
       do @saving
       do @creating if creating
+
+      # save belongTo models
+      # TODO port into event hook
+      if associations = @constructor.associations
+        if belongsTo = associations.belongsTo
+          belongsTo.forEach (key) =>
+            if (model = @get(key)) and model.state() != "saved"
+              model.save (err, record) =>
+                throw err if err
+                @set "#{key}_id", record.id
+            else if model
+              @set "#{key}_id", model.id
+
       @_doStorageOperation (if creating then 'create' else 'update'), {}, (err, record) =>
         unless err
           if creating
@@ -2089,6 +2110,20 @@ class Batman.Model extends Batman.Object
           do @saved
           @dirtyKeys.clear()
           record = @constructor._mapIdentity(record)
+
+          # save hasOne models
+          # TODO port into event hook
+          if associations and (hasOne = associations.hasOne)
+            hasOne.forEach (key) =>
+              # FIXME use `model = record.get(key)`
+              if model = record._batman.attributes?[key]
+                foreignKey = $functionName(@constructor).toLowerCase() + "_id"
+                model.set foreignKey, @id
+
+                unless model.state() is "saved"
+                  model.save (err, record) => throw err if err
+
+        # TODO don't fire overall callback until all associations have saved
         callback?(err, record)
 
   # `destroy` destroys a record in all the stores.
@@ -2134,6 +2169,67 @@ class Batman.Model extends Batman.Object
     return
 
   isNew: -> typeof @get('id') is 'undefined'
+
+Batman.Association = {}
+# TODO clenaup association objects
+
+class Batman.Association.belongsTo
+  constructor: (model, label, relatedModel) ->
+    # TODO abstract into Batman.Association
+    model.associations ||= {}
+    model.associations.belongsTo ||= new Batman.Hash
+    model.associations.belongsTo.set label, model
+    # TODO call @encode for "relatedModel_id"
+
+    model.accessor label,
+      get: ->
+        if relatedRecord = @_batman.attributes?[label]
+          return relatedRecord
+        else if id = @get(label + "_id")
+          relatedRecord = new relatedModel(id: id)
+          relatedRecord.load (error, loadedRecord) =>
+            throw error if error
+            relatedRecord = loadedRecord
+          return relatedRecord
+      set: Batman.Model.defaultAccessor.set
+      unset: Batman.Model.defaultAccessor.unset
+
+class Batman.Association.hasOne
+  constructor: (model, label, relatedModel) ->
+    # TODO abstract into Batman.Association
+    model.associations ||= {}
+    model.associations.hasOne ||= new Batman.Hash
+    model.associations.hasOne.set label, model
+    # TODO call @encode for "relatedModel_id"
+
+    model.accessor label,
+      get: ->
+        # FIXME need to short-circuit the get/set accessor loop
+        return if @amSetting
+        existingRelation = Batman.Model.defaultAccessor.get.call(@, label)
+        return existingRelation if existingRelation?
+        return unless @id # FIXME use accessor for id
+
+        modelName = $functionName(model).toLowerCase()
+        relatedRecords = relatedModel.get('loaded').indexedBy(modelName + '_id').get(@id)
+        unless relatedRecords.isEmpty()
+          return relatedRecords.toArray()[0]
+        else
+          loadOptions = {}
+          loadOptions[modelName + '_id'] = @id
+          # FIXME need to create an instance of the model we want to return immediately
+          loadedRecord = new relatedModel
+          @amSetting = true
+          @set label, loadedRecord
+          relatedModel.load loadOptions, (error, loadedRecords) =>
+            throw error if error
+            return unless loadedRecords and loadedRecords.length > 0
+            loadedRecord.fromJSON(loadedRecords[0].toJSON())
+            @amSetting = false
+          loadedRecord
+
+      set: Batman.Model.defaultAccessor.set
+      unset: Batman.Model.defaultAccessor.unset
 
 class Batman.ValidationError extends Batman.Object
   constructor: (attribute, message) -> super({attribute, message})
