@@ -1922,12 +1922,15 @@ class Batman.Model extends Batman.Object
         return record
 
   # ### Associations API
-
+  # TODO refactor
   @hasOne: (label, model) ->
     new Batman.Association.hasOne @, label, model
 
   @belongsTo: (label, model) ->
     new Batman.Association.belongsTo @, label, model
+
+  @hasMany: (label, model) ->
+    new Batman.Association.hasMany @, label, model
 
   # ### Record API
 
@@ -2113,15 +2116,26 @@ class Batman.Model extends Batman.Object
 
           # save hasOne models
           # TODO port into event hook
-          if associations and (hasOne = associations.hasOne)
-            hasOne.forEach (key) =>
-              # FIXME use `model = record.get(key)`
-              if model = record._batman.attributes?[key]
-                foreignKey = $functionName(@constructor).toLowerCase() + "_id"
-                model.set foreignKey, @id
+          if associations 
+            if hasOne = associations.hasOne
+              hasOne.forEach (key) =>
+                # FIXME use `model = record.get(key)`
+                if model = record._batman.attributes?[key]
+                  foreignKey = $functionName(@constructor).toLowerCase() + "_id"
+                  model.set foreignKey, @id
 
-                unless model.state() is "saved"
-                  model.save (err, record) => throw err if err
+                  unless model.state() is "saved"
+                    model.save (err, record) => throw err if err
+
+            if hasMany = associations.hasMany
+              hasMany.forEach (key) =>
+                # FIXME use `model = record.get(key)`
+                if hasManySet = record._batman.attributes?[key]
+                  hasManySet.forEach (model) =>
+                    foreignKey = $functionName(@constructor).toLowerCase() + "_id"
+                    model.set foreignKey, @id
+                    unless model.state() is "saved"
+                      model.save (err, record) => throw err if err
 
         # TODO don't fire overall callback until all associations have saved
         callback?(err, record)
@@ -2223,13 +2237,52 @@ class Batman.Association.hasOne
           @set label, loadedRecord
           relatedModel.load loadOptions, (error, loadedRecords) =>
             throw error if error
-            return unless loadedRecords and loadedRecords.length > 0
+            return unless loadedRecords or loadedRecords.isEmpty()
             loadedRecord.fromJSON(loadedRecords[0].toJSON())
             @amSetting = false
           loadedRecord
 
       set: Batman.Model.defaultAccessor.set
       unset: Batman.Model.defaultAccessor.unset
+
+class Batman.Association.hasMany
+  constructor: (model, label, relatedModel) ->
+    # TODO abstract into Batman.Association
+    model.associations ||= {}
+    model.associations.hasMany ||= new Batman.Hash
+    model.associations.hasMany.set label, model
+    # TODO call @encode for "relatedModel_id"
+
+    model.accessor label,
+      get: ->
+        # FIXME need to short-circuit the get/set accessor loop
+        return if @amSetting
+        existingRelation = Batman.Model.defaultAccessor.get.call(@, label)
+        return existingRelation if existingRelation?
+        return unless @id # FIXME use accessor for id
+
+        modelName = $functionName(model).toLowerCase()
+        relatedRecords = relatedModel.get('loaded').indexedBy(modelName + '_id').get(@id)
+        unless relatedRecords.isEmpty()
+          return relatedRecords.toArray()
+        else
+          loadOptions = {}
+          loadOptions[modelName + '_id'] = @id
+          # FIXME need to create a set to return immediately
+          loadedRecords = new Batman.Set
+          @amSetting = true
+          @set label, loadedRecords
+          relatedModel.load loadOptions, (error, records) =>
+            throw error if error
+            return unless records or records.isEmpty()
+            loadedRecords.add(record) for record in records
+            @amSetting = false
+          loadedRecords
+
+      set: Batman.Model.defaultAccessor.set
+      unset: Batman.Model.defaultAccessor.unset
+
+
 
 class Batman.ValidationError extends Batman.Object
   constructor: (attribute, message) -> super({attribute, message})
