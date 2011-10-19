@@ -1921,16 +1921,12 @@ class Batman.Model extends Batman.Object
         @get('loaded').add(record)
         return record
 
-  # ### Associations API
-  # TODO refactor
-  @hasOne: (label, model) ->
-    new Batman.Association.hasOne @, label, model
+  # ### Associations
 
-  @belongsTo: (label, model) ->
-    new Batman.Association.belongsTo @, label, model
-
-  @hasMany: (label, model) ->
-    new Batman.Association.hasMany @, label, model
+  for k in ['hasOne', 'belongsTo', 'hasMany']
+    do (k) ->
+      Model[k] = (label, model) ->
+        new Batman.Association[k] @, label, model
 
   # ### Record API
 
