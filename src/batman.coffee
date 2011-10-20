@@ -362,6 +362,9 @@ class Batman.Event
       @_oneShotFired = true
       @_oneShotArgs = arguments
     @eachHandler (handler) -> handler.apply(context, args)
+  allowAndFire: ->
+    @allow()
+    @fire(arguments...)
 
 Batman.EventEmitter =
   isEventEmitter: true
@@ -395,6 +398,8 @@ Batman.EventEmitter =
     @event(key).isPrevented()
   fire: (key, args...) ->
     @event(key).fire(args...)
+  allowAndFire: (key, args...) ->
+    @event(key).allowAndFire(args...)
 
 class Batman.PropertyEvent extends Batman.Event
   eachHandler: (iterator) -> @base.eachObserver(iterator)
@@ -1611,8 +1616,7 @@ class Batman.HashHistory extends Batman.HistoryManager
 
     result = @dispatch (@cachedHash = hash)
     if @first
-      Batman.currentApp.allow 'ready'
-      Batman.currentApp.fire 'ready'
+      Batman.currentApp.allowAndFire 'ready'
       @first = false
     result
 
@@ -1758,8 +1762,7 @@ class Batman.Controller extends Batman.Object
       view.contexts.push @
       view.on 'ready', ->
         Batman.DOM.replace 'main', view.get('node')
-        Batman.currentApp?.allow 'ready'
-        Batman.currentApp?.fire 'ready'
+        Batman.currentApp?.allowAndFire 'ready'
     view
 
 # Models
@@ -3201,8 +3204,7 @@ Batman.DOM = {
         contexts: context.chain()
 
       view.on 'ready', ->
-        renderer.allow 'rendered'
-        renderer.fire 'rendered'
+        renderer.allowAndFire 'rendered'
 
       true
 
@@ -3691,8 +3693,7 @@ class Batman.DOM.Iterator
       options.addNumber = @queuedAddNumber++
       @parentRenderer.prevent 'rendered'
       finish = =>
-        @parentRenderer.allow 'rendered'
-        @parentRenderer.fire 'rendered'
+        @parentRenderer.allowAndFire 'rendered'
 
       self = @
       childRenderer = new Batman.Renderer @_nodeForItem(item),
