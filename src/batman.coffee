@@ -2211,7 +2211,7 @@ class Batman.Association.belongsTo extends Batman.Association
     if relatedRecord = @_batman.attributes?[label]
       relatedRecord
     else if relatedID = @get(label + "_id")
-      relatedModel.find relatedID, (error, loadedRecord) =>
+      relatedModel.find relatedID, (error, loadedRecord) ->
         throw error if error
 
   save: (base) ->
