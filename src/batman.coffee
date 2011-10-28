@@ -2193,33 +2193,29 @@ class Batman.Association
 Batman.Association.Collection = (->
   class BatmanAssociationCollection
     constructor: ->
-      # Contains Batman.Association objects mapped by base model, type, and then label
-      # ie. @storage = {"Product": {"belongsTo": {<Association.belongsTo>: "store"}}}
+      # Contains (Association, label) pairs mapped by base model type and association type
+      # ie. @storage = {Model.constructor: {Association.constructor: {Association: label}}}
       @storage = new Batman.SimpleHash
 
     add: (association) ->
-      baseModelName = $functionName(association.model)
-      unless baseModelHash = @storage.get(baseModelName)
+      unless baseModelHash = @storage.get(association.model)
         baseModelHash = new Batman.SimpleHash
-        @storage.set baseModelName, baseModelHash
+        @storage.set association.model, baseModelHash
 
-      associationType = $functionName(association.constructor)
-      unless associationTypeHash = baseModelHash.get(associationType)
+      unless associationTypeHash = baseModelHash.get(association.constructor)
         associationTypeHash = new Batman.SimpleHash
-        baseModelHash.set associationType, associationTypeHash
+        baseModelHash.set association.constructor, associationTypeHash
 
       associationTypeHash.set association, association.label
 
     getModelAssociations: (model) ->
-      modelName = $functionName(model.constructor)
-      if hash = @storage.get(modelName)
-        belongsTo: hash.get('belongsTo')
-        hasOne: hash.get('hasOne')
-        hasMany: hash.get('hasMany')
+      if hash = @storage.get(model.constructor)
+        belongsTo: hash.get(Batman.Association.belongsTo)
+        hasOne: hash.get(Batman.Association.hasOne)
+        hasMany: hash.get(Batman.Association.hasMany)
 
     clearModelRelations: (model) ->
-      modelName = $functionName(model.constructor)
-      if modelHash = @storage.get(modelName)
+      if modelHash = @storage.get(model.constructor)
         modelHash.forEach (type, typeHash) ->
           typeHash.forEach (association, label) ->
             association.clearRelation(model)
@@ -2228,8 +2224,7 @@ Batman.Association.Collection = (->
       unless @_encodingRelation
         # Only encode this level of associations
         @_encodingRelation = true
-        modelName = $functionName(model.constructor)
-        if modelHash = @storage.get(modelName)
+        if modelHash = @storage.get(model.constructor)
           modelHash.forEach (type, typeHash) ->
             typeHash.forEach (association, label) ->
               association.encodeModelIntoObject(model, obj)
@@ -2239,8 +2234,7 @@ Batman.Association.Collection = (->
       unless @_decodingRelation
         # Only decode this level of associations
         @_decodingRelation = true
-        modelName = $functionName(model.constructor)
-        if modelHash = @storage.get(modelName)
+        if modelHash = @storage.get(model.constructor)
           modelHash.forEach (type, typeHash) ->
             typeHash.forEach (association, label) ->
               association.decodeObjectIntoModel(model, obj, data)
