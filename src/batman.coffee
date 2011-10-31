@@ -2367,18 +2367,14 @@ class Batman.Association.hasMany extends Batman.Association
       obj[@label] = jsonArray
 
   decodeObjectIntoModel: (model, obj, data) ->
-    if json = data[@label]
+    if jsonArray = data[@label]
       relations = new Batman.Set
       if relatedModel = @getRelatedModel()
-        idRegex = new RegExp("^#{$functionName(relatedModel).toLowerCase()}s(\\d+)$")
-        for own storageKey, obj of json
-          if matchResult = storageKey.match(idRegex)
-            id = matchResult[1]
-            record = new relatedModel(obj)
-            record.set 'id', id
-            relatedModel._mapIdentity(record)
-            relations.add record
-        obj[@label] = relations
+        for jsonObject in jsonArray
+          record = new relatedModel(jsonObject)
+          record = relatedModel._mapIdentity(record)
+          relations.add record
+      obj[@label] = relations
 
 class Batman.ValidationError extends Batman.Object
   constructor: (attribute, message) -> super({attribute, message})
