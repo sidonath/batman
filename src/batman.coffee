@@ -2277,6 +2277,11 @@ class Batman.Association.belongsTo extends Batman.Association
   clearRelation: -> # do nothing
 
 class Batman.Association.hasOne extends Batman.Association
+  constructor: ->
+    super
+    @propertyName = $functionName(@model).toLowerCase()
+    @foreignKey = "#{@propertyName}_id"
+
   getAccessor: (self, model, label) ->
     return if @amSetting
 
@@ -2292,8 +2297,7 @@ class Batman.Association.hasOne extends Batman.Association
     return unless id = @get('id')
 
     # Check whether the relatedModel has already loaded the instance we want
-    modelName = $functionName(model).toLowerCase()
-    relatedRecords = relatedModel.get('loaded').indexedBy("#{modelName}_id").get(id)
+    relatedRecords = relatedModel.get('loaded').indexedBy(self.foreignKey).get(id)
     unless relatedRecords.isEmpty()
       return relatedRecords.toArray()[0]
     else
@@ -2305,7 +2309,7 @@ class Batman.Association.hasOne extends Batman.Association
       @amSetting = false
 
       loadOptions = {}
-      loadOptions["#{modelName}_id"] = id
+      loadOptions[self.foreignKey] = id
       relatedModel.load loadOptions, (error, loadedRecords) =>
         throw error if error
         return if !loadedRecords or loadedRecords.length <= 0
@@ -2314,25 +2318,27 @@ class Batman.Association.hasOne extends Batman.Association
 
   save: (baseSaveError, base) ->
     if relatedModel = base._batman.attributes?[@label]
-      foreignKey = "#{$functionName(base.constructor).toLowerCase()}_id"
-      relatedModel.set foreignKey, base.id
+      relatedModel.set @foreignKey, base.id
 
   encodeModelIntoObject: (model, obj) ->
     if relation = model.get(@label)
       relationJSON = relation.toJSON()
-      modelName = $functionName(model.constructor).toLowerCase()
-      relationJSON["#{modelName}_id"] = model.get('id')
+      relationJSON[@foreignKey] = model.get('id')
       obj["#{@label}"] = relationJSON
 
   clearRelation: (base) ->
     # Unset the property on related models now pointing to a destroyed record
-    baseName = $functionName(base.constructor).toLowerCase()
     if relatedModel = @getRelatedModel()
-      relatedModel.get('loaded').indexedBy("#{baseName}_id").get(base.id).forEach (relatedInstance) ->
-        relatedInstance.unset("#{baseName}_id")
-        relatedInstance.unset(baseName)
+      relatedModel.get('loaded').indexedBy(@foreignKey).get(base.id).forEach (relatedInstance) =>
+        relatedInstance.unset(@foreignKey)
+        relatedInstance.unset(@propertyName)
 
 class Batman.Association.hasMany extends Batman.Association
+  constructor: ->
+    super
+    @propertyName = $functionName(@model).toLowerCase()
+    @foreignKey = "#{@propertyName}_id"
+
   getAccessor: (self, model, label) ->
     return if @amSetting
 
@@ -2342,8 +2348,7 @@ class Batman.Association.hasMany extends Batman.Association
     return unless relatedModel = self.getRelatedModel()
     return unless id = @get('id')
 
-    modelName = $functionName(model).toLowerCase()
-    relatedRecords = relatedModel.get('loaded').indexedBy("#{modelName}_id").get(id)
+    relatedRecords = relatedModel.get('loaded').indexedBy(self.foreignKey).get(id)
     unless relatedRecords.isEmpty()
       return relatedRecords
     else if recordInAttributes = @_batman.attributes?[label]
@@ -2359,7 +2364,7 @@ class Batman.Association.hasMany extends Batman.Association
       @amSetting = false
 
       loadOptions = {}
-      loadOptions["#{modelName}_id"] = id
+      loadOptions[self.foreignKey] = id
       relatedModel.load loadOptions, (error, records) =>
         throw error if error
         return unless records or records.isEmpty()
@@ -2368,19 +2373,17 @@ class Batman.Association.hasMany extends Batman.Association
 
   save: (baseSaveError, base) ->
     if relatedModels = base._batman.attributes?[@label]
-      foreignKey = "#{$functionName(base.constructor).toLowerCase()}_id"
       relatedModels.forEach (model) =>
-        model.set foreignKey, base.id
+        model.set @foreignKey, base.id
 
   clearRelation: Batman.Association.hasOne::clearRelation
 
   encodeModelIntoObject: (model, obj) ->
     if relationSet = model.get(@label)
       jsonArray = []
-      relationSet.forEach (relation) ->
+      relationSet.forEach (relation) =>
         relationJSON = relation.toJSON()
-        modelName = $functionName(model.constructor).toLowerCase()
-        relationJSON["#{modelName}_id"] = model.get('id')
+        relationJSON[@foreignKey] = model.get('id')
         jsonArray.push relationJSON
       obj[@label] = jsonArray
 
@@ -2390,11 +2393,12 @@ class Batman.Association.hasMany extends Batman.Association
       if relatedModel = @getRelatedModel()
         idRegex = new RegExp("^#{$functionName(relatedModel).toLowerCase()}s(\\d+)$")
         for own storageKey, obj of json
-          [_, id] = storageKey.match(idRegex)
-          record = new relatedModel(obj)
-          record.set 'id', id
-          relatedModel._mapIdentity(record)
-          relations.add record
+          if matchResult = storageKey.match(idRegex)
+            id = matchResult[1]
+            record = new relatedModel(obj)
+            record.set 'id', id
+            relatedModel._mapIdentity(record)
+            relations.add record
         obj[@label] = relations
 
 class Batman.ValidationError extends Batman.Object
