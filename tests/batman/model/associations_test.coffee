@@ -215,7 +215,6 @@ QUnit.module "hasMany Associations"
 
 asyncTest "hasMany associations are loaded", 6, ->
   @Store.find 1, (err, store) =>
-    debugger
     products = store.get 'products'
     delay =>
       trackedIds = {1: no, 2: no, 3: no}
@@ -225,7 +224,6 @@ asyncTest "hasMany associations are loaded", 6, ->
       equal trackedIds[1], yes
       equal trackedIds[2], yes
       equal trackedIds[3], yes
-    #QUnit.start()
 
 asyncTest "hasMany associations are saved via the parent model", 4, ->
   store = new @Store name: 'Zellers'
@@ -234,9 +232,7 @@ asyncTest "hasMany associations are saved via the parent model", 4, ->
   store.set 'products', new Batman.Set(product1, product2)
 
   storeSaveSpy = spyOn store, 'save'
-  debugger
   store.save (err, record) =>
-    debugger
     equal storeSaveSpy.callCount, 1
     equal product1.get('store_id'), record.id
     equal product2.get('store_id'), record.id
@@ -259,7 +255,6 @@ asyncTest "hasMany associations are saved via the child model", 2, ->
 
 asyncTest "hasMany association can be loaded from JSON data", 12, ->
   @Product.find 3, (err, product) =>
-    debugger
     variants = product.get('productVariants')
     ok variants instanceof Batman.Set
     equal variants.length, 2
