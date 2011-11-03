@@ -688,3 +688,13 @@ asyncTest 'data-bind-style should bind to a vanilla object of attr/keypath pairs
     delay =>
       equal node.style.color, 'green'
       equal node.style['background-color'], 'green'
+
+asyncTest 'data-bind-style should correctly work for style with absolute URL', 1, ->
+  source = '<input type="text" data-bind-style="string"></input>'
+  context = Batman
+    string: 'background-image: url("http://batmanjs.org/images/logo.png");'
+
+  helpers.render source, context, (node) ->
+    node = node[0]
+    equal node.style['background-image'], 'url("http://batmanjs.org/images/logo.png")'
+    QUnit.start()
